@@ -3,12 +3,16 @@ import { Text } from "react-native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { AuthContext } from "../context/AuthContext";
 
+
 const Stack = createNativeStackNavigator();
 
+
+function LoginScreen() { return <Text>Login</Text>; }
+function HomeScreen() { return <Text>Home</Text>; }
 function AuthStack() {
   return (
     <Stack.Navigator>
-      <Stack.Screen name="Login" component={() => <Text>Login</Text>} />
+     <Stack.Screen name="Login" component={LoginScreen} />
     </Stack.Navigator>
   );
 }
@@ -16,7 +20,8 @@ function AuthStack() {
 function AppStack() {
   return (
     <Stack.Navigator>
-      <Stack.Screen name="Home" component={() => <Text>Home</Text>} />
+     <Stack.Screen name="Home" component={HomeScreen} />
+
     </Stack.Navigator>
   );
 }
