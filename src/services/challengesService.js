@@ -61,7 +61,7 @@ export async function updateParticipantStatus(
 
 /**
  * Créer un challenge + inviter des participants
- * ⚠️ Le créateur n’est PAS participant
+ * ⚠️ Le créateur n’est PAS participant->le créateur doit partericiper au challenge
  */
 export async function createChallenge({
   creatorId,
@@ -160,7 +160,7 @@ export async function processUserChallenges(userId) {
     `)
     .eq("user_id", userId)
     .eq("status", "ACTIVE");
-
+  
   if (error) {
     console.error("Erreur chargement participations", error);
     return;
