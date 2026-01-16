@@ -3,6 +3,7 @@
     "name": "GameStrava",
     "slug": "GameStrava",
     "version": "1.0.0",
+    "scheme": "gamestrava",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -27,6 +28,7 @@
     },
     "plugins": [
       "expo-secure-store"
-    ]
+    ],
+    "entryPoint": "./index.js"
   }
 }
