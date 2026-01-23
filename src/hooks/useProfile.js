@@ -3,6 +3,7 @@ import { supabase } from "../services/supabaseClient.js";
 
 /**
  * Hook pour récupérer les données de profil utilisateur
+ * ⚠️ Adapté au schéma SQL fourni (Calcul des stats à la volée)
  */
 export function useProfile(userId) {
   const [profile, setProfile] = useState({
@@ -37,80 +38,93 @@ export function useProfile(userId) {
 
     setLoading(true);
     try {
-      // Récupérer les informations utilisateur
       const { data: userData, error: userError } = await supabase
         .from('users')
-        .select('*')
-        .eq('id', userId)
-        .single();
-
-      if (userError) throw userError;
-
-      // Récupérer les statistiques
-      const { data: statsData, error: statsError } = await supabase
-        .from('user_stats')
         .select('*')
         .eq('user_id', userId)
         .single();
 
-      if (statsError) throw statsError;
+      if (userError) throw userError;
 
-      // Récupérer les badges
+      const { data: pointsData, error: pointsError } = await supabase
+        .from('points_log')
+        .select('value')
+        .eq('user_id', userId);
+
+      if (pointsError) throw pointsError;
+      const totalPoints = pointsData.reduce((acc, curr) => acc + curr.value, 0);
+
+      const { data: activitiesData, error: activitiesError } = await supabase
+        .from('activities')
+        .select('*')
+        .eq('user_id', userId)
+        .order('start_date', { ascending: false });
+
+      if (activitiesError) throw activitiesError;
+
+      const totalActivities = activitiesData.length;
+      const totalDistance = activitiesData.reduce((acc, curr) => acc + (curr.distance || 0), 0) / 1000;
+
+      const { data: challengesData, error: challengesError } = await supabase
+        .from('challenge_participant')
+        .select('status')
+        .eq('user_id', userId);
+
+      if (challengesError) throw challengesError;
+
+      const challengesCompleted = challengesData.filter(c => c.status === 'COMPLETED').length;
+      const challengesWon = challengesData.filter(c => c.status === 'WON').length;
+
       const { data: badgesData, error: badgesError } = await supabase
-        .from('user_badges')
+        .from('user_badge')
         .select(`
-          *,
-          badges (*)
+          badge_id,
+          date_unlocked,
+          badges (
+            badge_id,
+            name,
+            description
+          )
         `)
         .eq('user_id', userId);
 
       if (badgesError) throw badgesError;
 
-      // Récupérer l'activité récente
-      const { data: activityData, error: activityError } = await supabase
-        .from('user_activity_log')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(10);
-
-      if (activityError) throw activityError;
-
       setProfile({
         user: {
-          name: userData.name,
+          name: userData.first_name ? `${userData.first_name} ${userData.last_name || ''}`.trim() : userData.username,
           email: userData.email,
           avatar: userData.avatar || '👤',
-          level: userData.level || 1,
-          xp: userData.xp || 0,
-          xpToNextLevel: userData.xp_to_next_level || 1000,
+          level: Math.floor(totalPoints / 1000) + 1,
+          xp: totalPoints,
+          xpToNextLevel: (Math.floor(totalPoints / 1000) + 1) * 1000,
           memberSince: new Date(userData.created_at).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
         },
         stats: {
-          totalPoints: statsData.total_points || 0,
-          challengesCompleted: statsData.challenges_completed || 0,
-          challengesWon: statsData.challenges_won || 0,
-          totalActivities: statsData.total_activities || 0,
-          totalDistance: statsData.total_distance || 0,
-          currentStreak: statsData.current_streak || 0,
-          bestStreak: statsData.best_streak || 0,
-          rank: statsData.rank || 0,
-          weeklyActivities: statsData.weekly_activities || 0,
-          activeChallenges: statsData.active_challenges || 0
+          totalPoints,
+          challengesCompleted,
+          challengesWon,
+          totalActivities,
+          totalDistance: parseFloat(totalDistance.toFixed(1)),
+          currentStreak: 0,
+          bestStreak: 0,
+          rank: 0,
+          weeklyActivities: 0,
+          activeChallenges: challengesData.filter(c => c.status === 'ACCEPTED' || c.status === 'ACTIVE').length
         },
-        badges: badgesData.map(badge => ({
-          id: badge.badges.id,
-          name: badge.badges.name,
-          emoji: badge.badges.emoji,
-          unlocked: badge.unlocked,
-          description: badge.badges.description
+        badges: badgesData.map(ub => ({
+          id: ub.badges.badge_id,
+          name: ub.badges.name,
+          emoji: '🏅',
+          unlocked: true,
+          description: ub.badges.description
         })),
-        recentActivity: activityData.map(activity => ({
-          id: activity.id,
+        recentActivity: activitiesData.slice(0, 5).map(activity => ({
+          id: activity.activity_id,
           type: activity.type,
-          title: activity.title,
-          points: activity.points,
-          date: new Date(activity.created_at).toLocaleDateString('fr-FR', {
+          title: `Activité ${new Date(activity.start_date).toLocaleDateString()}`,
+          points: Math.floor((activity.distance || 0) / 100),
+          date: new Date(activity.start_date).toLocaleDateString('fr-FR', {
             day: 'numeric',
             month: 'short'
           })
@@ -118,32 +132,43 @@ export function useProfile(userId) {
       });
     } catch (error) {
       console.error('Erreur lors du chargement du profil:', error);
-      // En cas d'erreur, utiliser des valeurs par défaut
-      setProfile({
-        user: {
-          name: 'Utilisateur',
-          email: '',
-          avatar: '👤',
-          level: 1,
-          xp: 0,
-          xpToNextLevel: 1000,
-          memberSince: ''
-        },
-        stats: {
-          totalPoints: 0,
-          challengesCompleted: 0,
-          challengesWon: 0,
-          totalActivities: 0,
-          totalDistance: 0,
-          currentStreak: 0,
-          bestStreak: 0,
-          rank: 0
-        },
-        badges: [],
-        recentActivity: []
-      });
+      setProfile(prev => ({ ...prev }));
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function updateUserProfile(updates) {
+    if (!userId) return;
+
+    try {
+      const dbUpdates = {};
+
+      // Handle name update (split into first/last)
+      if (updates.name) {
+        const parts = updates.name.trim().split(' ');
+        dbUpdates.first_name = parts[0];
+        dbUpdates.last_name = parts.slice(1).join(' ') || '';
+      }
+
+      // Handle other fields if needed (e.g. avatar)
+      if (updates.avatar) {
+        dbUpdates.avatar = updates.avatar;
+      }
+
+      const { error } = await supabase
+        .from('users')
+        .update(dbUpdates)
+        .eq('user_id', userId);
+
+      if (error) throw error;
+
+      // Reload to reflect changes
+      await loadProfile();
+      return { success: true };
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      return { success: false, error };
     }
   }
 
@@ -154,6 +179,7 @@ export function useProfile(userId) {
   return {
     profile,
     loading,
-    refreshProfile: loadProfile
+    refreshProfile: loadProfile,
+    updateUserProfile
   };
 }

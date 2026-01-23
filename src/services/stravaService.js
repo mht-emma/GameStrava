@@ -13,8 +13,14 @@ WebBrowser.maybeCompleteAuthSession();
  * =========================
  */
 // Ces variables doivent être définies dans votre fichier .env
-const STRAVA_CLIENT_ID = process.env.EXPO_PUBLIC_STRAVA_CLIENT_ID || 'YOUR_CLIENT_ID';
-const STRAVA_CLIENT_SECRET = process.env.EXPO_PUBLIC_STRAVA_CLIENT_SECRET || 'YOUR_CLIENT_SECRET';
+const STRAVA_CLIENT_ID = process.env.EXPO_PUBLIC_STRAVA_CLIENT_ID;
+const STRAVA_CLIENT_SECRET = process.env.EXPO_PUBLIC_STRAVA_CLIENT_SECRET;
+
+// Sécurité : Vérification que les clés ne sont pas les valeurs par défaut
+if (!STRAVA_CLIENT_ID || STRAVA_CLIENT_ID === 'YOUR_CLIENT_ID' || STRAVA_CLIENT_ID === 'TON_CLIENT_ID') {
+  console.error('❌ ERREUR CRITIQUE : Strava Client ID non configuré !');
+  console.error('👉 Modifiez le fichier .env avec vos vrais identifiants Strava.');
+}
 
 // Configuration des URLs de l'API Strava
 const STRAVA_AUTH_URL =
@@ -34,23 +40,55 @@ const SCOPES = ['read', 'activity:read'];
  */
 export async function loginWithStrava() {
   try {
-    // Configuration de l'URL de redirection
-    const redirectUri = AuthSession.makeRedirectUri({
-      // En développement, on utilise le proxy Expo
-      useProxy: Platform.OS !== 'web' && __DEV__,
-      // En production, on utilise le schéma de l'application
-      native: 'gamestrava://auth',
-      // Sur web, évite 127.0.0.1/localhost incohérents
-      preferLocalhost: Platform.OS === 'web',
+    // 1️⃣ Configuration de l'URL de redirection
+    // On génère l'URI de base gérée par Expo (exp:// en dev, schema natif en prod)
+    let redirectUri = AuthSession.makeRedirectUri({
+      useProxy: false, // Important : pas de proxy pour Strava
     });
 
-    console.log('URL de redirection:', redirectUri);
+    // 🩹 CORRECTION CRITIQUE POUR STRAVA :
+    // Strava restreint les domaines de redirection (Callback Domain).
+    // Si on est en "localhost" sur le dashboard Strava, il faut que l'URI contienne "localhost".
+    // Problème : Expo Go génère souvent une IP (ex: exp://192.168.1.10:8081).
+    // Solution : On remplace l'IP par "localhost" pour satisfaire Strava.
+    // L'OS mobile saura quand même router "exp://" ou "athletix://" vers la bonne app.
 
-    // Vérification de l'URL de redirection
-    if (!redirectUri) {
-      throw new Error('Impossible de générer l\'URL de redirection. Vérifiez votre configuration.');
+    // Regex pour remplacer l'IP/Domaine par localhost tout en gardant le port et le schéma
+    // Ex: exp://192.168.1.10:8081/... -> exp://localhost:8081/...
+    // Ex: athletix://redirect -> athletix://localhost/redirect
+    if (!redirectUri.includes('localhost')) {
+      // On remplace tout ce qui est entre "://" et le prochain "/" ou la fin par "localhost"
+      // Attention aux ports
+      const schemeIndex = redirectUri.indexOf('://');
+      if (schemeIndex > -1) {
+        const scheme = redirectUri.substring(0, schemeIndex);
+        const rest = redirectUri.substring(schemeIndex + 3);
+
+        // Si on a un port (cas Expo Go: 192.168.1.10:8081)
+        if (rest.includes(':')) {
+          const portIndex = rest.indexOf(':');
+          const pathIndex = rest.indexOf('/');
+          const port = pathIndex > -1 ? rest.substring(portIndex, pathIndex) : rest.substring(portIndex);
+          const path = pathIndex > -1 ? rest.substring(pathIndex) : '';
+          redirectUri = `${scheme}://localhost${port}${path}`;
+        } else {
+          // Pas de port (cas Standalone: athletix://redirect)
+          const pathIndex = rest.indexOf('/');
+          const path = pathIndex > -1 ? rest.substring(pathIndex) : '';
+          redirectUri = `${scheme}://localhost${path}`;
+        }
+      }
     }
 
+    // Fallback de sécurité si le regex échoue ou si path vide
+    if (!redirectUri.endsWith('/redirect') && !redirectUri.includes('redirect')) {
+      // Expo Go root path sometimes fails deep linking without path
+      // redirectUri += '/redirect'; 
+    }
+
+    console.log('🔗 URL de redirection optimisée :', redirectUri);
+
+    // 2️⃣ Paramètres d'autorisation
     const authUrl =
       `${STRAVA_AUTH_URL}?` +
       `client_id=${encodeURIComponent(STRAVA_CLIENT_ID)}` +
@@ -59,42 +97,35 @@ export async function loginWithStrava() {
       `&approval_prompt=auto` +
       `&scope=${encodeURIComponent(SCOPES.join(','))}`;
 
-    console.log('Démarrage du flux OAuth avec Strava...');
+    console.log('🚀 Démarrage OAuth Strava...');
 
+    // 3️⃣ Ouverture du navigateur
+    // On passe redirectUri pour que WebBrowser sache quand fermer la fenêtre
     const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUri);
 
-    console.log('Résultat de l\'authentification:', result.type);
+    console.log('📥 Résultat Auth:', result.type, result.url);
 
-    // Vérification du résultat
+    // 4️⃣ Gestion du retour
     if (result.type !== 'success') {
-      if (result.type === 'cancel') {
-        throw new Error('Connexion annulée par l\'utilisateur');
-      } else if (result.type === 'dismiss') {
-        throw new Error('Fenêtre d\'authentification fermée');
-      } else if (result.type === 'error') {
-        throw new Error(`Erreur d'authentification: ${result.error?.message || 'Inconnue'}`);
-      } else {
-        throw new Error(`Échec de l'authentification: ${result.type}`);
-      }
+      if (result.type === 'cancel') throw new Error('Connexion annulée par l\'utilisateur');
+      if (result.type === 'dismiss') throw new Error('Fenêtre fermée sans connexion (Vérifiez le schéma URL)');
+      throw new Error(`Erreur authentification: ${result.type}`);
     }
 
-    if (!result.url) {
-      console.error('URL de retour manquante:', result);
-      throw new Error('Réponse inattendue du serveur d\'authentification');
-    }
+    if (!result.url) throw new Error('URL de retour vide');
 
-    // Extraction du code depuis l'URL de retour
+    // 5️⃣ Extraction du code
+    // L'URL de retour contient le code
     const codeMatch = result.url.match(/[?&]code=([^&]+)/);
     const code = codeMatch ? decodeURIComponent(codeMatch[1]) : null;
-    if (!code) {
-      console.error('Code manquant dans l\'URL de retour:', result.url);
-      throw new Error('Code d\'autorisation manquant');
-    }
 
-    console.log('Code d\'autorisation reçu, échange en cours...');
+    if (!code) throw new Error('Code OAuth introuvable dans l\'URL de retour');
+
+    console.log('✅ Code d\'autorisation reçu !');
     return code;
+
   } catch (error) {
-    console.error('Erreur lors de la connexion à Strava:', error);
+    console.error('❌ Erreur loginWithStrava:', error);
     throw error;
   }
 }
@@ -107,7 +138,7 @@ export async function loginWithStrava() {
 export async function exchangeCodeForToken(code) {
   try {
     console.log('Échange du code contre un token...');
-    
+
     const response = await fetch(STRAVA_TOKEN_URL, {
       method: 'POST',
       headers: {
@@ -128,7 +159,7 @@ export async function exchangeCodeForToken(code) {
     }
 
     const data = await response.json();
-    
+
     if (!data.access_token || !data.refresh_token || !data.expires_at) {
       console.error('Réponse de token invalide:', data);
       throw new Error('Réponse de token invalide de l\'API Strava');
@@ -149,7 +180,7 @@ export async function exchangeCodeForToken(code) {
 export async function refreshAccessToken(refreshToken) {
   try {
     console.log('Rafraîchissement du token d\'accès...');
-    
+
     const response = await fetch(STRAVA_TOKEN_URL, {
       method: 'POST',
       headers: {
@@ -170,7 +201,7 @@ export async function refreshAccessToken(refreshToken) {
     }
 
     const data = await response.json();
-    
+
     if (!data.access_token || !data.refresh_token) {
       throw new Error('Réponse de rafraîchissement de token invalide');
     }

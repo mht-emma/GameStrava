@@ -7,14 +7,15 @@
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { supabase } from './supabaseClient';
-import { 
-  loginWithStrava, 
-  exchangeCodeForToken, 
+import {
+  loginWithStrava,
+  exchangeCodeForToken,
   refreshAccessToken,
-  getAthlete, 
-  getActivities 
+  getAthlete,
+  getActivities
 } from './stravaService';
 import { syncActivities } from './sync.service';
+import { DEMO_MODE, DEMO_USER } from '../config/config';
 
 // Configuration du logger
 const logger = {
@@ -73,9 +74,6 @@ const StorageAdapter = {
  * =============================
  */
 
-/**
- * Sauvegarde les tokens Strava de manière sécurisée
- */
 export async function saveStravaTokens(tokenData) {
   try {
     await StorageAdapter.setItem('strava_access_token', tokenData.access_token);
@@ -88,9 +86,6 @@ export async function saveStravaTokens(tokenData) {
   }
 }
 
-/**
- * Sauvegarde l'ID de l'utilisateur Supabase (pour restauration session)
- */
 export async function saveUserId(userId) {
   try {
     await StorageAdapter.setItem('user_id', userId);
@@ -101,9 +96,6 @@ export async function saveUserId(userId) {
   }
 }
 
-/**
- * Récupère l'ID utilisateur stocké
- */
 export async function getStoredUserId() {
   try {
     return await StorageAdapter.getItem('user_id');
@@ -113,9 +105,6 @@ export async function getStoredUserId() {
   }
 }
 
-/**
- * Récupère le token d'accès stocké
- */
 export async function getStoredAccessToken() {
   try {
     return await StorageAdapter.getItem('strava_access_token');
@@ -125,9 +114,6 @@ export async function getStoredAccessToken() {
   }
 }
 
-/**
- * Récupère le refresh token stocké
- */
 export async function getStoredRefreshToken() {
   try {
     return await StorageAdapter.getItem('strava_refresh_token');
@@ -137,9 +123,6 @@ export async function getStoredRefreshToken() {
   }
 }
 
-/**
- * Récupère la date d'expiration du token
- */
 export async function getStoredExpiresAt() {
   try {
     const expiresAt = await StorageAdapter.getItem('strava_expires_at');
@@ -150,9 +133,6 @@ export async function getStoredExpiresAt() {
   }
 }
 
-/**
- * Vérifie si le token est expiré
- */
 export function isTokenExpired(expiresAtSeconds) {
   try {
     if (!expiresAtSeconds) return true;
@@ -163,9 +143,6 @@ export function isTokenExpired(expiresAtSeconds) {
   }
 }
 
-/**
- * Nettoie tous les tokens stockés
- */
 export async function clearStoredTokens() {
   try {
     await StorageAdapter.removeItem('strava_access_token');
@@ -181,158 +158,55 @@ export async function clearStoredTokens() {
 
 /**
  * =============================
- * LOGIN STRAVA COMPLET
- * =============================
- */
-
-/**
- * 🔓 WORKFLOW COMPLET: OAuth → Tokens → User Supabase
- * @returns {Promise<{user: Object, stravaToken: Object}>} Les informations de l'utilisateur et le token Strava
- */
-export async function loginWithStravaOAuth() {
-  try {
-    logger.info('Démarrage du processus de connexion avec Strava...');
-    
-    // 1. Lancer le flux OAuth avec Strava
-    logger.info('Étape 1/4: Lancement du flux OAuth...');
-    const authCode = await loginWithStrava();
-    
-    if (!authCode) {
-      throw new Error('Aucun code d\'autorisation reçu de Strava');
-    }
-    
-    logger.info('Code d\'autorisation reçu, échange en cours...');
-    
-    // 2. Échanger le code contre un token d'accès
-    const tokenData = await exchangeCodeForToken(authCode);
-    
-    if (!tokenData?.access_token) {
-      throw new Error('Échec de l\'obtention du token d\'accès');
-    }
-    
-    logger.info('Token obtenu avec succès, récupération des informations de l\'athlète...');
-    
-    // 3. Récupérer les infos de l'athlète
-    const athlete = await getAthlete(tokenData.access_token);
-    
-    if (!athlete?.id) {
-      throw new Error('Impossible de récupérer les informations de l\'athlète');
-    }
-    
-    logger.info(`Athlète récupéré: ${athlete.firstname} ${athlete.lastname} (ID: ${athlete.id})`);
-    
-    // 4. Créer ou mettre à jour l'utilisateur dans Supabase
-    const user = await createOrGetUser(athlete, tokenData);
-    
-    if (!user?.id) {
-      throw new Error('Échec de la création/mise à jour de l\'utilisateur');
-    }
-    
-    logger.info(`Utilisateur ${user.id} connecté avec succès`);
-
-    await Promise.all([
-      saveStravaTokens(tokenData),
-      saveUserId(user.id),
-    ]);
-    
-    // 5. Synchroniser les activités en arrière-plan (sans attendre la fin)
-    syncActivities(tokenData.access_token, user.id)
-      .then(() => logger.info('Synchronisation des activités terminée avec succès'))
-      .catch(syncError => 
-        logger.warn('Échec de la synchronisation initiale des activités:', syncError.message)
-      );
-    
-    return { user, stravaToken: tokenData };
-    
-  } catch (error) {
-    logger.error('Erreur lors de la connexion avec Strava:', error);
-    
-    // Nettoyage en cas d'erreur
-    try {
-      await clearStoredTokens();
-    } catch (cleanupError) {
-      logger.error('Erreur lors du nettoyage des tokens:', cleanupError);
-    }
-    
-    // Amélioration du message d'erreur pour l'utilisateur
-    let errorMessage = 'Une erreur est survenue lors de la connexion';
-    
-    if (error.message.includes('network')) {
-      errorMessage = 'Erreur de réseau. Vérifiez votre connexion Internet.';
-    } else if (error.message.includes('cancel')) {
-      errorMessage = 'Connexion annulée';
-    } else if (error.message.includes('invalid_grant')) {
-      errorMessage = 'Session expirée. Veuillez vous reconnecter.';
-    }
-    
-    const enhancedError = new Error(errorMessage);
-    enhancedError.originalError = error;
-    throw enhancedError;
-  }
-}
-
-/**
- * =============================
  * GESTION UTILISATEUR SUPABASE
  * =============================
  */
 
 /**
  * Crée un nouvel utilisateur ou récupère l'existant
+ * ⚠️ ADAPTÉ AU SCHÉMA SQL FOURNI : Table 'users' (pas 'profiles')
  */
 export async function createOrGetUser(athlete, tokenData) {
   try {
-    // Vérifier si l'utilisateur existe
-    const { data: existingUser, error: selectError } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('strava_athlete_id', athlete.id)
-      .single();
+    // Mapping des données Strava -> Colonnes SQL 'users' et 'profiles' (si legacy, mais ici on vise 'users')
+    // Le schéma fourni : users(user_id, username, first_name, last_name, city, country, email, sex, weight, height, avatar)
 
-    // L'utilisateur existe
-    if (existingUser) {
-      console.log('👤 Utilisateur existant trouvé');
+    const userData = {
+      user_id: athlete.id.toString(), // TEXT PRIMARY KEY
+      username: athlete.username || `athlete_${athlete.id}`,
+      first_name: athlete.firstname,
+      last_name: athlete.lastname,
+      city: athlete.city || 'Unknown',
+      country: athlete.country || 'Unknown',
+      email: athlete.email || null,
+      sex: athlete.sex || null,
+      weight: athlete.weight || 0,
+      height: 180, // Valeur arbitraire raisonnable si manquante
+      avatar: athlete.profile,
+      // created_at DEFAULT NOW()
+    };
 
-      // Mettre à jour les infos si changées
-      await supabase
-        .from('profiles')
-        .update({
-          username: athlete.username,
-          avatar: athlete.profile,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', existingUser.id);
+    console.log(`👤 Upsert user dans table 'users': ${userData.user_id}`);
 
-      return existingUser;
-    }
-
-    // Créer un nouvel utilisateur
-    console.log('👤 Création nouvel utilisateur');
-    const { data: newUser, error: insertError } = await supabase
-      .from('profiles')
-      .insert({
-        strava_athlete_id: athlete.id,
-        username: athlete.username,
-        email: athlete.email || null,
-        avatar: athlete.profile,
-        first_name: athlete.firstname,
-        last_name: athlete.lastname,
-        city: athlete.city || null,
-        state: athlete.state || null,
-        country: athlete.country || null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
+    const { data: user, error } = await supabase
+      .from('users') // Nom de table corrigé selon schéma
+      .upsert(userData, { onConflict: 'user_id' })
       .select()
       .single();
 
-    if (insertError) {
-      throw insertError;
+    if (error) {
+      console.error('❌ Erreur Upsert User:', error);
+      throw error;
     }
 
-    return newUser;
+    // Compatibilité interne de l'app (attend souvent .id)
+    if (user && user.user_id) {
+      user.id = user.user_id;
+    }
+
+    return user;
   } catch (error) {
-    console.error('❌ Erreur gestion utilisateur:', error.message);
+    console.error('❌ Erreur createOrGetUser:', error.message);
     throw error;
   }
 }
@@ -343,12 +217,18 @@ export async function createOrGetUser(athlete, tokenData) {
 export async function getCurrentUser(userId) {
   try {
     const { data, error } = await supabase
-      .from('profiles')
+      .from('users') // Nom de table corrigé selon schéma
       .select('*')
-      .eq('id', userId)
+      .eq('user_id', userId) // PK correcte
       .single();
 
     if (error) throw error;
+
+    // Compatibilité interne
+    if (data && data.user_id) {
+      data.id = data.user_id;
+    }
+
     return data;
   } catch (error) {
     console.error('❌ Erreur récupération utilisateur:', error.message);
@@ -358,13 +238,88 @@ export async function getCurrentUser(userId) {
 
 /**
  * =============================
+ * LOGIN STRAVA COMPLET
+ * =============================
+ */
+
+export async function loginWithStravaOAuth() {
+  // 🚧 MODE DÉMO ACTIVÉ
+  if (DEMO_MODE) {
+    logger.info('[DEMO MODE] ⏩ Bypass OAuth Strava activé');
+
+    // 1. Simulation de l'athlète
+    const demoAthlete = {
+      id: DEMO_USER.id,
+      username: DEMO_USER.username,
+      firstname: DEMO_USER.firstname,
+      lastname: DEMO_USER.lastname,
+      profile: DEMO_USER.profile,
+      city: DEMO_USER.city,
+      country: DEMO_USER.country,
+      sex: DEMO_USER.sex,
+      weight: DEMO_USER.weight,
+      email: 'demo@athletix.app'
+    };
+
+    const demoToken = {
+      access_token: 'demo_access_token_123',
+      refresh_token: 'demo_refresh_token_123',
+      expires_at: Math.floor(Date.now() / 1000) + 86400, // +24h
+      athlete: demoAthlete
+    };
+
+    // 2. Création/Update en BDD Supabase (via createOrGetUser pour cohérence)
+    logger.info('[DEMO MODE] Upsert du User Démo en BDD...');
+    const user = await createOrGetUser(demoAthlete, demoToken);
+
+    // 3. Sauvegarde session locale
+    await Promise.all([
+      saveStravaTokens(demoToken),
+      saveUserId(user.user_id), // Attention : user_id (Supabase PK)
+    ]);
+
+    logger.info('[DEMO MODE] Session établie avec succès.');
+    return { user, stravaToken: demoToken };
+  }
+
+  // --- FLUX NORMAL (DEMO_MODE = false) ---
+  try {
+    logger.info('Démarrage connexion Strava (Normal Flow)...');
+
+    const authCode = await loginWithStrava();
+    if (!authCode) throw new Error('Aucun code reçu.');
+
+    const tokenData = await exchangeCodeForToken(authCode);
+    if (!tokenData?.access_token) throw new Error('Pas de token d\'accès.');
+
+    const athlete = await getAthlete(tokenData.access_token);
+    if (!athlete?.id) throw new Error('Infos athlète introuvables.');
+
+    const user = await createOrGetUser(athlete, tokenData);
+
+    await Promise.all([
+      saveStravaTokens(tokenData),
+      saveUserId(user.user_id),
+    ]);
+
+    // Sync non bloquante
+    syncActivities(tokenData.access_token, user.user_id).catch(e => logger.warn('Sync error:', e));
+
+    return { user, stravaToken: tokenData };
+
+  } catch (error) {
+    logger.error('Erreur login:', error);
+    await clearStoredTokens().catch(() => { });
+    throw error;
+  }
+}
+
+/**
+ * =============================
  * LOGOUT
  * =============================
  */
 
-/**
- * Déconnexion complète
- */
 export async function logout() {
   try {
     console.log('🚪 Déconnexion...');
@@ -383,105 +338,97 @@ export async function logout() {
  * =============================
  */
 
-/**
- * Restaure une session depuis les tokens stockés
- * Appelé au démarrage de l'app
- * @returns {Promise<{user: Object|null, stravaToken: Object|null}>} L'utilisateur et le token Strava s'ils existent
- */
 export async function restoreSession() {
+  // 🚧 MODE DÉMO : Restauration forcée
+  if (DEMO_MODE) {
+    logger.info('[DEMO MODE] ⏩ Restauration session Démo forcée');
+
+    const demoAthlete = {
+      id: DEMO_USER.id,
+      username: DEMO_USER.username,
+      firstname: DEMO_USER.firstname,
+      lastname: DEMO_USER.lastname,
+      profile: DEMO_USER.profile,
+      city: DEMO_USER.city,
+      country: DEMO_USER.country,
+      sex: DEMO_USER.sex,
+      weight: DEMO_USER.weight,
+    };
+
+    // On s'assure que l'utilisateur est bien en base au démarrage
+    // (utile pour afficher le dashboard même si login pas appelé explicitement)
+    try {
+      const user = await createOrGetUser(demoAthlete, null);
+      return {
+        user,
+        stravaToken: { access_token: 'demo', refresh_token: 'demo' }
+      };
+    } catch (e) {
+      logger.error('[DEMO MODE] Erreur restauration user:', e);
+      return { user: null, stravaToken: null };
+    }
+  }
+
+  // --- RESTAURATION NORMALE ---
   try {
-    logger.info('Tentative de restauration de la session...');
-    
-    // Récupération des tokens stockés
+    logger.info('Tentative restauration session...');
+
     const [accessToken, refreshToken, expiresAt] = await Promise.all([
       getStoredAccessToken(),
       getStoredRefreshToken(),
       getStoredExpiresAt(),
     ]);
-    
-    // Vérification de la présence des tokens
+
     if (!accessToken || !refreshToken || !expiresAt) {
-      logger.info('Aucun token stocké trouvé');
       return { user: null, stravaToken: null };
     }
-    
-    logger.info('Tokens trouvés, vérification de la validité...');
-    
-    // Vérification de l'expiration du token
-    const isExpired = isTokenExpired(expiresAt);
-    
-    if (isExpired) {
-      logger.info('Token expiré, tentative de rafraîchissement...');
-      
+
+    if (isTokenExpired(expiresAt)) {
+      logger.info('Token expiré, refresh...');
       try {
-        // Tentative de rafraîchissement du token
         const newTokenData = await refreshAccessToken(refreshToken);
-        
-        // Mise à jour des tokens dans le stockage
         await saveStravaTokens(newTokenData);
-        
-        // Récupération de l'utilisateur
+
         const userId = await getStoredUserId();
-        if (!userId) {
-          throw new Error('ID utilisateur non trouvé');
-        }
-        
+        if (!userId) throw new Error('No User ID');
+
         const user = await getCurrentUser(userId);
-        
-        if (!user) {
-          throw new Error('Utilisateur non trouvé');
-        }
-        
-        logger.info('Session restaurée avec succès après rafraîchissement');
+        if (!user) throw new Error('User not found in DB');
+
         return { user, stravaToken: newTokenData };
-        
-      } catch (refreshError) {
-        logger.warn('Échec du rafraîchissement du token:', refreshError.message);
+      } catch (e) {
+        logger.warn('Refresh failed:', e);
         await clearStoredTokens();
         return { user: null, stravaToken: null };
       }
     }
-    
-    // Si le token est toujours valide, récupérer l'utilisateur
-    logger.info('Token toujours valide, récupération de l\'utilisateur...');
-    
+
+    // Token valide
     const userId = await getStoredUserId();
     if (!userId) {
-      logger.warn('Aucun ID utilisateur trouvé dans le stockage');
       await clearStoredTokens();
       return { user: null, stravaToken: null };
     }
-    
+
     const user = await getCurrentUser(userId);
-    
     if (!user) {
-      logger.warn('Utilisateur non trouvé dans la base de données');
       await clearStoredTokens();
       return { user: null, stravaToken: null };
     }
-    
-    logger.info(`Session restaurée pour l'utilisateur ${user.id}`);
-    
-    return { 
-      user, 
-      stravaToken: { 
-        access_token: accessToken, 
-        refresh_token: refreshToken, 
+
+    logger.info(`Session restaurée: ${user.user_id}`);
+
+    return {
+      user,
+      stravaToken: {
+        access_token: accessToken,
+        refresh_token: refreshToken,
         expires_at: parseInt(expiresAt, 10),
-        athlete: user.athlete_data // Ajout des données athlète pour une utilisation immédiate
-      } 
+      }
     };
-    
+
   } catch (error) {
-    logger.error('Erreur lors de la restauration de la session:', error);
-    
-    // En cas d'erreur grave, on nettoie tout
-    try {
-      await clearStoredTokens();
-    } catch (cleanupError) {
-      logger.error('Erreur lors du nettoyage des tokens:', cleanupError);
-    }
-    
+    logger.error('Erreur restauration:', error);
     return { user: null, stravaToken: null };
   }
 }

@@ -1,7 +1,7 @@
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { useAnimatedStyle, withSpring } from 'react-native-reanimated';
 
@@ -20,15 +20,15 @@ import { icons } from '../theme/icons';
 
 const Tab = createBottomTabNavigator();
 
-// Composant d'onglet animé personnalisé
+// Composant d'onglet animé personnalisé (Minimaliste)
 const CustomTabBarButton = ({ children, onPress, accessibilityState }) => {
-  const focused = accessibilityState.selected;
+  const focused = accessibilityState?.selected;
 
   const animatedStyle = useAnimatedStyle(() => {
     return {
       transform: [
         {
-          scale: withSpring(focused ? 1.1 : 1, {
+          scale: withSpring(focused ? 1.05 : 1, {
             damping: 15,
             stiffness: 150,
           }),
@@ -38,16 +38,18 @@ const CustomTabBarButton = ({ children, onPress, accessibilityState }) => {
   });
 
   return (
-    <Animated.View style={[styles.tabButtonContainer, animatedStyle]}>
-      <LinearGradient
-        colors={focused ? colors.gradients.primary : colors.gradients.dark}
-        style={styles.tabButtonGradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-      >
-        {children}
-      </LinearGradient>
-    </Animated.View>
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.8}
+      style={{ flex: 1 }}
+    >
+      <Animated.View style={[styles.tabButtonContainer, animatedStyle]}>
+        <View style={styles.tabButtonContent}>
+          {children}
+          {focused && <View style={styles.activeDot} />}
+        </View>
+      </Animated.View>
+    </TouchableOpacity>
   );
 };
 
@@ -65,8 +67,8 @@ const AppNavigator = () => {
               end={{ x: 1, y: 1 }}
             />
           ),
-          tabBarActiveTintColor: colors.primary,
-          tabBarInactiveTintColor: colors.text.secondary,
+          tabBarActiveTintColor: colors.primary, // Green when active
+          tabBarInactiveTintColor: colors.text.secondary, // Grey when inactive
           headerShown: false,
           tabBarShowLabel: true,
           tabBarLabelStyle: styles.tabLabel,
@@ -81,8 +83,8 @@ const AppNavigator = () => {
             tabBarIcon: ({ focused, color, size }) => (
               <Icon
                 name={focused ? icons.homeFilled : icons.home}
-                size={size}
-                color={focused ? colors.black : color}
+                size={24}
+                color={color} // Use the color passed by react-navigation (Green or Grey)
               />
             ),
           }}
@@ -95,8 +97,8 @@ const AppNavigator = () => {
             tabBarIcon: ({ focused, color, size }) => (
               <Icon
                 name={focused ? icons.challengesFilled : icons.challenges}
-                size={size}
-                color={focused ? colors.black : color}
+                size={24}
+                color={color}
               />
             ),
           }}
@@ -109,8 +111,8 @@ const AppNavigator = () => {
             tabBarIcon: ({ focused, color, size }) => (
               <Icon
                 name={focused ? 'trophy' : 'trophy-outline'}
-                size={size}
-                color={focused ? colors.black : color}
+                size={24}
+                color={color}
               />
             ),
           }}
@@ -123,8 +125,8 @@ const AppNavigator = () => {
             tabBarIcon: ({ focused, color, size }) => (
               <Icon
                 name={focused ? icons.profileFilled : icons.profile}
-                size={size}
-                color={focused ? colors.black : color}
+                size={24}
+                color={color}
               />
             ),
           }}
@@ -137,38 +139,45 @@ const AppNavigator = () => {
 const styles = StyleSheet.create({
   tabBar: {
     position: 'absolute',
-    bottom: spacing.lg,
-    left: spacing.xl,
-    right: spacing.xl,
-    height: 70,
-    borderRadius: borderRadius.xxxl,
+    bottom: 25,
+    left: 20,
+    right: 20,
+    height: 80,
+    borderRadius: 30, // Softer roundness, less pill-like
     borderTopWidth: 0,
-    elevation: 10,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
+    elevation: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
     borderWidth: 1,
-    borderColor: colors.primary + '30',
+    borderColor: 'rgba(255,255,255,0.1)', // Subtle glass border
     backgroundColor: 'transparent',
   },
   tabButtonContainer: {
     flex: 1,
-    margin: spacing.xs,
-    borderRadius: borderRadius.xl,
-    overflow: 'hidden',
-  },
-  tabButtonGradient: {
-    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: spacing.sm,
+  },
+  tabButtonContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: '100%',
+    width: '100%',
   },
   tabLabel: {
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: '600',
-    marginTop: spacing.xxs,
+    marginTop: 4,
   },
+  activeDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.primary,
+    position: 'absolute',
+    bottom: 12, // Positioning underneath the label
+  }
 });
 
 export default AppNavigator;

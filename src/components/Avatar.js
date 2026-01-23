@@ -29,7 +29,7 @@ const Avatar = ({
   style,
 }) => {
   const getSize = () => avatarSizes[size] || avatarSizes.md;
-  
+
   const getInitials = () => {
     if (!name) return '?';
     const parts = name.trim().split(' ');

@@ -2,14 +2,14 @@
 
 /**
  * 🎨 POINT D'ENTRÉE DU THEME
- * Design System GameStrava - Dark Theme Moderne
+ * Design System AthletiX - Dark Theme Moderne
  */
 
 export { colors, shadows } from './colors';
-export { 
-  spacing, 
-  borderRadius, 
-  iconSizes, 
+export {
+  spacing,
+  borderRadius,
+  iconSizes,
   buttonHeight,
   buttonPadding,
   inputHeight,

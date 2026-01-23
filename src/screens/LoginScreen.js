@@ -15,7 +15,7 @@ import { AuthContext } from '../context/AuthContext';
  */
 const LoginScreen = () => {
   const { login, loading: authLoading, error: authError } = useContext(AuthContext);
-  
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [emailFocused, setEmailFocused] = useState(false);
@@ -31,7 +31,7 @@ const LoginScreen = () => {
     try {
       logoScale.value = withSequence(withSpring(1.2), withSpring(1));
       logoRotate.value = withSequence(withTiming(360, { duration: 600 }), withTiming(0, { duration: 0 }));
-      
+
       await login();
       // Le succès est géré par AuthContext → App.js rendra AppNavigator
       Alert.alert('✅ Succès', 'Authentification réussie!');
@@ -69,7 +69,7 @@ const LoginScreen = () => {
       <Animated.View entering={FadeIn.delay(500)} style={[styles.floatingOrb, styles.orb2]} />
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        
+
         {/* Header Section */}
         <Animated.View entering={FadeInDown.delay(100).springify()} style={styles.header}>
           <Animated.View style={[styles.logoContainer, logoAnimatedStyle]}>
@@ -80,7 +80,7 @@ const LoginScreen = () => {
             </View>
           </Animated.View>
 
-          <Text style={styles.title}>GameStrava</Text>
+          <Text style={styles.title}>AthletiX</Text>
           <View style={styles.taglineContainer}>
             <View style={styles.accentLine} />
             <Text style={styles.subtitle}>Défie tes limites</Text>
@@ -91,7 +91,7 @@ const LoginScreen = () => {
         {/* Form Card */}
         <Animated.View entering={FadeInUp.delay(500).springify()} style={styles.glassCard}>
           <View style={styles.cardContent}>
-            
+
             {/* Input Email */}
             <View style={styles.inputContainer}>
               <Text style={styles.label}>Email</Text>
@@ -130,7 +130,7 @@ const LoginScreen = () => {
               </View>
             </View>
 
-        {/* Login Button */}
+            {/* Login Button */}
             <Pressable onPress={handleLocalLogin} disabled={authLoading} style={({ pressed }) => [styles.loginButton, (pressed || authLoading) && { opacity: 0.6 }]}>
               <LinearGradient colors={['#69a342', '#69a342']} style={styles.loginButtonGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
                 <Text style={styles.loginButtonText}>{authLoading ? '⏳ Chargement...' : 'SE CONNECTER'}</Text>
@@ -142,7 +142,7 @@ const LoginScreen = () => {
             </View>
 
             {/* Strava Button - AUTHENTIFICATION RÉELLE */}
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.stravaButton, authLoading && { opacity: 0.6 }]}
               onPress={handleStravaLogin}
               disabled={authLoading}

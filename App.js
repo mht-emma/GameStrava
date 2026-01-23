@@ -61,7 +61,7 @@ const AppContent = () => {
 
   // ✅ Authentifié → Affiche l'application
   return (
-    <SafeAreaProvider>
+    <SafeAreaProvider style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={colors.background} />
       <AppNavigator />
     </SafeAreaProvider>

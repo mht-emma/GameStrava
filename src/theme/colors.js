@@ -12,12 +12,12 @@ export const colors = {
   primaryDark: '#7FB518',    // Version plus foncée
   primaryLight: '#B5D858',   // Version plus claire
   primaryMuted: 'rgba(154, 205, 50, 0.15)', // Pour backgrounds subtils
-  
+
   // Couleurs secondaires - Dark theme (couleurs exactes demandées)
   secondary: '#191919',      // Gris très foncé
   secondaryLight: '#2A2A2A', // Cards, éléments surélevés
   secondaryLighter: '#5B5B5B', // Gris moyen (couleur demandée)
-  
+
   // Gradients (pour LinearGradient) - Plus sophistiqués
   gradients: {
     primary: ['#9ACD32', '#7FB518'],
@@ -29,16 +29,16 @@ export const colors = {
     ocean: ['#006D77', '#83C5BE', '#EDF6F9'],
     forest: ['#606C38', '#283618', '#FEFAE0'],
     neon: ['#9ACD32', '#B5D858', '#7FB518'],
-    premium: ['#1A1A2E', '#16213E', '#0F3460'],
+    premium: ['#121212', '#000000', '#121212'], // Noir/Gris pour matcher le fond
     glass: ['rgba(255, 255, 255, 0.1)', 'rgba(255, 255, 255, 0.05)'],
   },
-  
+
   // Status (pour les états de défis)
   success: '#4ADE80',        // Vert succès
   error: '#F87171',          // Rouge erreur
   warning: '#FBBF24',        // Orange attention
   info: '#60A5FA',           // Bleu information
-  
+
   // Neutres
   white: '#FFFFFF',
   black: '#000000',
@@ -55,7 +55,7 @@ export const colors = {
     900: '#171717',
     medium: '#5B5B5B', // Gris moyen spécifique
   },
-  
+
   // Backgrounds - Dark theme (couleurs exactes demandées)
   background: '#000000',       // Noir pur (fond principal)
   backgroundDark: '#191919',   // Gris très foncé (alternative)
@@ -63,7 +63,7 @@ export const colors = {
   backgroundLighter: '#5B5B5B', // Gris moyen pour éléments interactifs
   surface: '#191919',          // Surfaces élevées (gris foncé)
   surfaceLight: '#2A2A2A',     // Surfaces plus claires
-  
+
   // Text - Pour dark theme
   text: {
     primary: '#FFFFFF',        // Blanc pur (texte principal)
@@ -74,7 +74,7 @@ export const colors = {
     onPrimary: '#000000',      // Texte sur fond lime (noir)
     accent: '#CDFB47',         // Texte accent lime
   },
-  
+
   // États des défis (pour l'UI)
   challenge: {
     invited: '#FBBF24',   // Jaune - En attente
@@ -84,13 +84,13 @@ export const colors = {
     failed: '#F87171',    // Rouge - Échoué
     refused: '#737373',   // Gris - Refusé
   },
-  
+
   // Overlay et effets
   overlay: 'rgba(0, 0, 0, 0.5)',
   overlayLight: 'rgba(0, 0, 0, 0.3)',
   glow: 'rgba(205, 251, 71, 0.4)',
   shadow: 'rgba(0, 0, 0, 0.25)',
-  
+
   // Strava brand
   strava: '#FC4C02',
 };

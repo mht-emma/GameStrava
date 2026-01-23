@@ -47,6 +47,44 @@ export function isChallengeCompleted(challenge, activities) {
    RÈGLES PAR TYPE DE DÉFI
    ========================= */
 
+/**
+ * Calcule la progression numérique d'un défi
+ */
+export function calculateChallengeProgress(challenge, activities) {
+  const validActivities = filterActivities(challenge, activities);
+
+  switch (challenge.type) {
+    case "DISTANCE_TOTAL":
+      return validActivities.reduce((sum, act) => sum + (act.distance || 0), 0);
+
+    case "ACTIVITY_COUNT":
+      return validActivities.length;
+
+    case "TOTAL_TIME":
+      return validActivities.reduce((sum, act) => sum + (act.elapsed_time || 0), 0);
+
+    case "SINGLE_ACTIVITY_DISTANCE":
+      // Pour un "max distance", la progression est la meilleure distance réalisée
+      const maxDist = Math.max(...validActivities.map(a => a.distance || 0), 0);
+      return Math.min(maxDist, challenge.target); // Cap at target for progress bar visual
+
+    case "REGULARITY":
+      const uniqueDays = new Set(
+        validActivities.map(activity =>
+          new Date(activity.start_date).toDateString()
+        )
+      );
+      return uniqueDays.size;
+
+    default:
+      return 0;
+  }
+}
+
+/* =========================
+   RÈGLES PAR TYPE DE DÉFI
+   ========================= */
+
 function checkTotalDistance(challenge, activities) {
   const totalDistance = activities.reduce(
     (sum, activity) => sum + activity.distance,

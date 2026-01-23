@@ -1,18 +1,19 @@
 import { supabase } from "../services/supabaseClient.js";
-import { isChallengeCompleted } from "../utils/challengeRules.js";
+import { isChallengeCompleted, calculateChallengeProgress } from "../utils/challengeRules.js";
 import { calculateChallengePoints } from "../utils/pointsRules.js";
 import { calculateChallengeDifficulty } from "../utils/challengeDifficulty.js";
 
-/* =====================================================
-   FETCH
-   ===================================================== */
+import { supabase } from "../services/supabaseClient.js";
+import { isChallengeCompleted, calculateChallengeProgress } from "../utils/challengeRules.js";
+import { calculateChallengePoints } from "../utils/pointsRules.js";
+import { calculateChallengeDifficulty } from "../utils/challengeDifficulty.js";
 
 /**
  * Récupérer les défis d’un utilisateur
  * via challenge_participant
  */
 export async function fetchChallenges(userId) {
-  const { data, error } = await supabase
+  const { data: challengesData, error } = await supabase
     .from("challenge_participant")
     .select(`
       status,
@@ -25,15 +26,28 @@ export async function fetchChallenges(userId) {
     return [];
   }
 
-  return data.map(row => ({
-    ...row.challenge,
-    participant_status: row.status
-  }));
-}
+  const { data: activities, error: actError } = await supabase
+    .from('activities')
+    .select('*')
+    .eq('user_id', userId);
 
-/* =====================================================
-   UPDATE PARTICIPANT
-   ===================================================== */
+  if (actError) {
+    console.warn("Impossible de charger les activités pour la progression", actError);
+  }
+
+  const userActivities = activities || [];
+
+  return challengesData.map(row => {
+    const challenge = row.challenge;
+    const progress = calculateChallengeProgress(challenge, userActivities);
+
+    return {
+      ...challenge,
+      participant_status: row.status,
+      progress: progress || 0,
+    };
+  });
+}
 
 /**
  * Met à jour le statut d’un participant
@@ -55,20 +69,14 @@ export async function updateParticipantStatus(
   }
 }
 
-/* =====================================================
-   CREATE CHALLENGE
-   ===================================================== */
-
 /**
  * Créer un challenge + inviter des participants
- * ⚠️ Le créateur n’est PAS participant
  */
 export async function createChallenge({
   creatorId,
   challengeData,
   invitedUserIds = []
 }) {
-  // 1️⃣ Créer le challenge
   const { data: challenge, error } = await supabase
     .from("challenges")
     .insert({
@@ -84,29 +92,34 @@ export async function createChallenge({
     throw error;
   }
 
-  // 2️⃣ Invitations
-  if (invitedUserIds.length > 0) {
-    const rows = invitedUserIds.map(userId => ({
+  const participantsToAdd = [
+    {
       challenge_id: challenge.challenge_id,
-      user_id: userId,
-      status: "INVITED"
-    }));
-
-    const { error: inviteError } = await supabase
-      .from("challenge_participant")
-      .insert(rows);
-
-    if (inviteError) {
-      console.error("Erreur invitations challenge", inviteError);
+      user_id: creatorId,
+      status: "ACTIVE"
     }
+  ];
+
+  if (invitedUserIds.length > 0) {
+    invitedUserIds.forEach(uid => {
+      participantsToAdd.push({
+        challenge_id: challenge.challenge_id,
+        user_id: uid,
+        status: "INVITED"
+      });
+    });
+  }
+
+  const { error: inviteError } = await supabase
+    .from("challenge_participant")
+    .insert(participantsToAdd);
+
+  if (inviteError) {
+    console.error("Erreur ajout participants challenge", inviteError);
   }
 
   return challenge;
 }
-
-/* =====================================================
-   INVITATION ACTIONS
-   ===================================================== */
 
 /**
  * Accepter une invitation
@@ -142,16 +155,10 @@ export async function declineChallenge(challengeId, userId) {
   }
 }
 
-/* =====================================================
-   CORE BUSINESS LOGIC
-   ===================================================== */
-
 /**
- * 🔥 LOGIQUE MÉTIER CENTRALE
  * Vérifie et traite tous les défis actifs d’un utilisateur
  */
 export async function processUserChallenges(userId) {
-  // 1️⃣ Défis actifs
   const { data: participations, error } = await supabase
     .from("challenge_participant")
     .select(`
@@ -166,7 +173,6 @@ export async function processUserChallenges(userId) {
     return;
   }
 
-  // 2️⃣ Activités utilisateur
   const { data: activities, error: activityError } = await supabase
     .from("activities")
     .select("*")
@@ -177,7 +183,6 @@ export async function processUserChallenges(userId) {
     return;
   }
 
-  // 3️⃣ Traitement métier
   for (const row of participations) {
     const challenge = row.challenge;
 
@@ -215,9 +220,5 @@ export async function processUserChallenges(userId) {
       value: points,
       source: "CHALLENGE_COMPLETED"
     });
-
-    console.log(
-      `✅ Défi ${challenge.challenge_id} complété (${difficulty}) → +${points} pts`
-    );
   }
 }
