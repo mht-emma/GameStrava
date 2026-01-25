@@ -1,8 +1,9 @@
 {
   "expo": {
-    "name": "GameStrava",
-    "slug": "GameStrava",
+    "name": "AthletiX",
+    "slug": "athletix",
     "version": "1.0.0",
+    "scheme": "athletix",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -27,6 +28,7 @@
     },
     "plugins": [
       "expo-secure-store"
-    ]
+    ],
+    "entryPoint": "./index.js"
   }
 }
